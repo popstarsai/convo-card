@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ConvoCard — My Conversation History Is My Business Card</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Navigation / Brand Header -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">CC</div>
+        <div>
+          <h1 class="brand-title">ConvoCard <span class="badge-version">v0.1</span></h1>
+          <p class="brand-tagline">“My conversation history is my business card.”</p>
+        </div>
+      </div>
+      <div class="topbar-meta">
+        <span class="pill pill-network">
+          <span class="status-dot" aria-hidden="true"></span>
+          Arc Testnet · Chain ID 5042002
+        </span>
+        <span class="pill pill-standard">ERC-8004 Agent Identity</span>
+      </div>
+    </header>
+
+    <!-- Main Two-Column Workspace -->
+    <main class="workspace">
+      <!-- Left Column: Input Studio -->
+      <section class="panel input-panel" aria-labelledby="input-heading">
+        <div class="panel-header">
+          <div>
+            <h2 id="input-heading">1. Source Material</h2>
+            <p class="panel-subtitle">Paste OCR’d AI conversation history and optional founder context.</p>
+          </div>
+          <button type="button" id="load-sample-btn" class="btn btn-ghost btn-sm">
+            Load Sample OCR
+          </button>
+        </div>
+
+        <form id="card-form" class="card-form" novalidate>
+          <!-- Required: OCR'd Conversation History -->
+          <div class="form-group">
+            <label for="ocr-history">
+              OCR’d Conversation History <span class="required-tag">Required</span>
+            </label>
+            <textarea
+              id="ocr-history"
+              name="ocrHistory"
+              rows="10"
+              placeholder="Paste raw or OCR’d AI chat transcripts here (e.g., User: ... / Assistant: ... or unstructured notes from ChatGPT/Claude screenshots)..."
+              required
+            ></textarea>
+            <div class="field-hint">
+              <span id="ocr-char-count">0 chars</span> · Processed locally in your browser.
+            </div>
+          </div>
+
+          <!-- Optional: Founder Name & Short Bio -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="founder-name">Founder / Agent Name <span class="optional-tag">Optional</span></label>
+              <input
+                type="text"
+                id="founder-name"
+                name="founderName"
+                placeholder="e.g., Alex Rivera"
+                autocomplete="name"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="founder-bio">Short Bio <span class="optional-tag">Optional</span></label>
+              <input
+                type="text"
+                id="founder-bio"
+                name="founderBio"
+                placeholder="e.g., Building autonomous treasury tools on Arc"
+              />
+            </div>
+          </div>
+
+          <!-- Optional: GitHub Repo Links -->
+          <div class="form-group">
+            <label for="github-repos">
+              GitHub Repo Links <span class="optional-tag">Optional</span>
+            </label>
+            <textarea
+              id="github-repos"
+              name="githubRepos"
+              rows="3"
+              placeholder="One URL per line, e.g.&#10;https://github.com/popstarsai/convo-card&#10;https://github.com/popstarsai/arc-agent-kit"
+            ></textarea>
+            <div class="field-hint">
+              Repo names and stack signals are woven into your AgentCard’s proof-of-work.
+            </div>
+          </div>
+
+          <!-- Validation / Status Message -->
+          <div id="form-error" class="alert alert-error" role="alert" hidden></div>
+
+          <!-- Primary Actions -->
+          <div class="form-actions">
+            <button type="submit" id="generate-btn" class="btn btn-primary">
+              Generate Card
+            </button>
+            <button type="button" id="clear-btn" class="btn btn-ghost">
+              Clear
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Right Column: Structured AgentCard Preview & Arc Registration -->
+      <section class="panel output-panel" aria-labelledby="output-heading">
+        <div class="panel-header">
+          <div>
+            <h2 id="output-heading">2. Living AgentCard</h2>
+            <p class="panel-subtitle">Structured ERC-8004 identity distilled from your conversations.</p>
+          </div>
+          <div class="view-toggle" role="tablist" aria-label="Card view mode">
+            <button type="button" id="tab-card" class="toggle-btn active" role="tab" aria-selected="true">
+              Card View
+            </button>
+            <button type="button" id="tab-json" class="toggle-btn" role="tab" aria-selected="false">
+              JSON
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon" aria-hidden="true">🪪</div>
+          <h3>No AgentCard generated yet</h3>
+          <p>
+            Paste your OCR’d conversation history on the left and click
+            <strong>Generate Card</strong> to distill your topics, skills, and proof-of-work into an ERC-8004 card.
+          </p>
+        </div>
+
+        <!-- Card View -->
+        <div id="card-preview" class="agent-card" hidden>
+          <div class="agent-card-top">
+            <div class="agent-avatar" id="card-avatar" aria-hidden="true">CC</div>
+            <div class="agent-identity">
+              <div class="agent-name-row">
+                <h3 id="card-name">Unnamed Builder</h3>
+                <span class="erc-chip">ERC-8004</span>
+              </div>
+              <p id="card-bio" class="agent-bio"></p>
+            </div>
+          </div>
+
+          <!-- Conversation Signal Metrics -->
+          <div class="metrics-strip" id="card-metrics"></div>
+
+          <!-- Extracted Topics & Capabilities -->
+          <div class="card-section">
+            <h4>Core Domains &amp; Topics</h4>
+            <div class="tag-list" id="card-topics"></div>
+          </div>
+
+          <div class="card-section">
+            <h4>Detected Skills &amp; Stack</h4>
+            <div class="tag-list" id="card-skills"></div>
+          </div>
+
+          <!-- Conversation Highlights / Proof of Thought -->
+          <div class="card-section">
+            <h4>Conversation Signals</h4>
+            <ul class="signal-list" id="card-signals"></ul>
+          </div>
+
+          <!-- GitHub Proof of Work -->
+          <div class="card-section" id="card-repos-section" hidden>
+            <h4>Linked GitHub Repositories</h4>
+            <ul class="repo-list" id="card-repos"></ul>
+          </div>
+
+          <!-- Card Footer Actions -->
+          <div class="card-footer">
+            <div class="card-footer-left">
+              <button type="button" id="copy-json-btn" class="btn btn-ghost btn-sm">
+                Copy JSON
+              </button>
+              <button type="button" id="download-json-btn" class="btn btn-ghost btn-sm">
+                Download .json
+              </button>
+            </div>
+            <button type="button" id="register-arc-btn" class="btn btn-accent">
+              Register on Arc Testnet
+            </button>
+          </div>
+        </div>
+
+        <!-- Raw JSON View -->
+        <div id="json-preview" class="json-panel" hidden>
+          <pre><code id="json-code"></code></pre>
+        </div>
+
+        <!-- Arc Testnet Registration Prep Drawer -->
+        <div id="arc-panel" class="arc-panel" hidden>
+          <div class="arc-panel-header">
+            <div>
+              <span class="arc-eyebrow">Arc Testnet · Registration Prep (v0.1)</span>
+              <h3>Ready to Mint ERC-8004 Identity</h3>
+            </div>
+            <button type="button" id="close-arc-btn" class="btn btn-ghost btn-sm" aria-label="Close registration panel">
+              ✕
+            </button>
+          </div>
+
+          <p class="arc-description">
+            Browser wallet signing &amp; IPFS pinning are stubbed for v0.1. Below is the prepared
+            on-chain registration payload and CLI fallback using <code>scripts/register.ts</code>.
+          </p>
+
+          <div class="arc-grid">
+            <div class="arc-kv">
+              <span class="kv-label">Network</span>
+              <span class="kv-value">Arc Testnet (Chain ID: 5042002)</span>
+            </div>
+            <div class="arc-kv">
+              <span class="kv-label">RPC URL</span>
+              <span class="kv-value mono">https://rpc.testnet.arc.io</span>
+            </div>
+            <div class="arc-kv">
+              <span class="kv-label">Gas Token</span>
+              <span class="kv-value">USDC (Testnet Faucet)</span>
+            </div>
+            <div class="arc-kv">
+              <span class="kv-label">Card Digest (SHA-256)</span>
+              <span class="kv-value mono" id="arc-digest">—</span>
+            </div>
+          </div>
+
+          <div class="arc-steps">
+            <h4>Next Steps to Register</h4>
+            <ol>
+              <li>
+                Download <code>agent-card.json</code> or copy the prepared payload below.
+              </li>
+              <li>
+                Run the v0.1 CLI registrar from the project root:
+                <pre class="cli-box"><code id="arc-cli-cmd">npx tsx scripts/register.ts</code></pre>
+              </li>
+              <li>
+                <strong>Coming next (Astra handoff):</strong> Connect EVM wallet, upload card to IPFS,
+                and submit <code>register(tokenURI)</code> directly from this button.
+              </li>
+            </ol>
+          </div>
+
+          <div class="arc-actions">
+            <button type="button" id="copy-payload-btn" class="btn btn-primary btn-sm">
+              Copy Registration Payload
+            </button>
+            <button type="button" id="wallet-stub-btn" class="btn btn-ghost btn-sm" disabled title="Planned for v0.2 wallet integration">
+              Connect Wallet (v0.2)
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
