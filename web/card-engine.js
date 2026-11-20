@@ -1,229 +1,135 @@
 /**
- * ConvoCard v0.1 — Browser Card Engine
- * ---------------------------------------------------------------------------
- * Lightweight, zero-build browser adapter mirroring the core TypeScript
- * pipeline in `src/`:
- *   - `processHistory.ts` -> `processHistory()`
- *   - `generateCard.ts`   -> `generateCard()`
- *   - `registerAgent.ts`  -> `prepareArcRegistration()`
- *
- * TODO(astra): When adding a lightweight bundler (e.g. Vite) or build step,
- * you can import `processHistory` and `generateCard` directly from `../src/`
- * and replace `prepareArcRegistration` with real wallet + IPFS + ERC-8004
- * contract calls.
+ * ConvoCard v0.1 — zero-build browser adapter for the TypeScript core.
+ * Input and preview fields mirror src/types.ts, processHistory.ts and generateCard.ts.
+ * The CLI adds the authoritative Keccak-256 contentHash; browser SHA-256 is only
+ * a checksum of the exported preview JSON, never an on-chain identity or CID.
+ * TODO(v0.2): Share the core module once a browser build is introduced; keep the
+ * parity tests until then. No external scripts are needed for this adapter.
  */
 
-export const ARC_TESTNET_CONFIG = {
+export const ARC_TESTNET_CONFIG = Object.freeze({
   chainId: 5042002,
   chainIdHex: '0x4cef52',
   networkName: 'Arc Testnet',
   rpcUrl: 'https://rpc.testnet.arc.io',
   gasToken: 'USDC',
-  // TODO(astra): Set the deployed ERC-8004 IdentityRegistry contract address on Arc Testnet
+  explorerUrl: 'https://explorer.testnet.arc.io',
   identityRegistryAddress: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
-};
+});
 
-const KNOWN_SKILLS = [
-  'TypeScript', 'JavaScript', 'Solidity', 'Rust', 'Python', 'React', 'Next.js',
-  'Node.js', 'Ethereum', 'Arc', 'ERC-8004', 'ERC-721', 'IPFS', 'Zero-Knowledge',
-  'AI Agents', 'LLM', 'OCR', 'Smart Contracts', 'DeFi', 'USDC', 'GraphQL',
-  'PostgreSQL', 'Docker', 'Viem', 'Wagmi', 'Ethers.js', 'Hardhat', 'Foundry',
+// Keep extraction order and limits aligned with src/processHistory.ts.
+const TOPICS = [
+  'ai agents', 'agentic', 'blockchain', 'solidity', 'rust', 'typescript',
+  'react', 'next.js', 'smart contracts', 'defi', 'stablecoins', 'usdc',
+  'arc', 'flare', 'ethereum', 'machine learning', 'llm', 'gemini',
+  'chatgpt', 'rag', 'orchestration', 'microservices', 'api', 'security',
+  'ownership', 'identity', 'reputation', 'erc-8004', 'github',
+];
+const SKILLS = [
+  'typescript', 'javascript', 'python', 'rust', 'solidity', 'go',
+  'react', 'next.js', 'node.js', 'viem', 'ethers', 'hardhat', 'foundry',
+  'docker', 'kubernetes', 'aws', 'gcp', 'ai engineering', 'prompt engineering',
+  'system design', 'smart contract development', 'agent development',
 ];
 
-const TOPIC_KEYWORDS = {
-  'On-Chain Agent Identity': ['erc-8004', 'agentcard', 'identity', 'registry', 'did', 'reputation'],
-  'Blockchain & Web3': ['arc', 'testnet', 'blockchain', 'wallet', 'smart contract', 'usdc', 'on-chain', 'onchain', 'gas'],
-  'AI & LLM Workflows': ['prompt', 'llm', 'claude', 'chatgpt', 'agent', 'rag', 'embedding', 'ocr'],
-  'Product & Founder Strategy': ['founder', 'mvp', 'roadmap', 'onboarding', 'user', 'launch', 'vision', 'business card'],
-  'Full-Stack Engineering': ['typescript', 'frontend', 'backend', 'api', 'react', 'node', 'github', 'repo'],
-  'Decentralized Storage': ['ipfs', 'cid', 'pinata', 'filecoin', 'metadata', 'tokenuri'],
-};
-
-/**
- * Parse GitHub repository URLs into normalized metadata objects.
- * @param {string} rawReposText
- * @returns {Array<{ url: string, owner: string, repo: string, slug: string }>}
- */
+/** Normalize repository links for ConversationInput.githubRepos. */
 export function parseGitHubRepos(rawReposText = '') {
-  const lines = rawReposText
-    .split(/[\n,]+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  const parsed = [];
+  const repos = [];
   const seen = new Set();
-
-  for (const line of lines) {
-    const match = line.match(/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i);
-    if (match) {
-      const owner = match[1];
-      const repo = match[2].replace(/\.git$/i, '');
-      const slug = `${owner}/${repo}`;
-      if (!seen.has(slug)) {
-        seen.add(slug);
-        parsed.push({
-          url: `https://github.com/${slug}`,
-          owner,
-          repo,
-          slug,
-        });
-      }
+  for (const line of rawReposText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)) {
+    let url;
+    try { url = new URL(line); } catch { /* Report the invalid input below. */ }
+    const match = url?.pathname.match(/^\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_.-]+)\/?$/);
+    if (!url || url.protocol !== 'https:' || url.hostname !== 'github.com'
+      || url.username || url.password || url.port || url.search || url.hash || !match) {
+      throw new Error('Use full GitHub repository URLs, such as https://github.com/owner/repo.');
+    }
+    const repo = match[2].replace(/\.git$/i, '');
+    if (!repo || repo === '.' || repo === '..') throw new Error('Enter a valid GitHub repository name.');
+    const normalized = `https://github.com/${match[1]}/${repo}`;
+    if (!seen.has(normalized.toLowerCase())) {
+      seen.add(normalized.toLowerCase());
+      repos.push(normalized);
     }
   }
-
-  return parsed;
+  return repos;
 }
 
-/**
- * Browser counterpart to `src/processHistory.ts`.
- * Extracts conversation metrics, detected skills, core domains, and key signals
- * from raw or OCR'd AI chat transcripts.
- *
- * @param {string} rawOcrText
- * @param {Array} githubRepos
- */
-export function processHistory(rawOcrText, githubRepos = []) {
-  const cleaned = rawOcrText.replace(/\r\n/g, '\n').trim();
-  const lines = cleaned.split('\n').map((l) => l.trim()).filter(Boolean);
-  const lower = cleaned.toLowerCase();
-
-  // Estimate conversation turns (looks for User:/Human:/Assistant:/AI: markers or fallback line chunks)
-  const speakerLines = lines.filter((l) =>
-    /^(user|human|me|founder|assistant|ai|chatgpt|claude|gemini)\s*:/i.test(l)
-  );
-  const estimatedTurns = speakerLines.length > 0
-    ? speakerLines.length
-    : Math.max(1, Math.ceil(lines.length / 3));
-
-  const wordCount = cleaned.split(/\s+/).filter(Boolean).length;
-
-  // Detect technical & domain skills mentioned in conversation or repo names
-  const repoText = githubRepos.map((r) => r.slug).join(' ').toLowerCase();
-  const combinedLower = `${lower} ${repoText}`;
-
-  const detectedSkills = KNOWN_SKILLS.filter((skill) =>
-    combinedLower.includes(skill.toLowerCase())
-  );
-
-  // Detect high-level domains/topics
-  const detectedTopics = [];
-  for (const [topic, keywords] of Object.entries(TOPIC_KEYWORDS)) {
-    if (keywords.some((kw) => combinedLower.includes(kw))) {
-      detectedTopics.push(topic);
-    }
+/** Form adapter. The result is accepted directly by the TypeScript CLI. */
+export function createConversationInput({ name = '', bio = '', rawHistory = '', githubReposText = '' }) {
+  if (typeof rawHistory !== 'string' || !rawHistory.trim()) {
+    throw new Error('Please paste some conversation history first.');
   }
+  return { name: name.trim(), bio: bio.trim(), rawHistory, githubRepos: parseGitHubRepos(githubReposText) };
+}
 
-  // Extract up to 4 representative founder/builder signal lines
-  const signalCandidates = lines
-    .map((l) => l.replace(/^(user|human|me|founder|assistant|ai|chatgpt|claude|gemini)\s*:\s*/i, ''))
-    .filter((l) => l.length >= 28 && l.length <= 220);
-
-  const uniqueSignals = [];
-  for (const candidate of signalCandidates) {
-    if (uniqueSignals.length >= 4) break;
-    if (!uniqueSignals.includes(candidate)) {
-      uniqueSignals.push(candidate);
-    }
-  }
-
-  if (uniqueSignals.length === 0 && cleaned.length > 0) {
-    uniqueSignals.push(cleaned.slice(0, 160) + (cleaned.length > 160 ? '…' : ''));
-  }
-
+/** Browser counterpart to src/processHistory.ts; extraction is local and rule-based. */
+export function processHistory(input) {
+  const cleanedText = (input.rawHistory || '')
+    .replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+  const lower = cleanedText.toLowerCase();
   return {
-    wordCount,
-    lineCount: lines.length,
-    estimatedTurns,
-    topics: detectedTopics.length > 0 ? detectedTopics : ['General AI Collaboration'],
-    skills: detectedSkills.length > 0 ? detectedSkills : ['AI-Assisted Building'],
-    signals: uniqueSignals,
+    cleanedText,
+    historySummary: cleanedText.length > 420 ? cleanedText.slice(0, 400).trim() + '...' : cleanedText,
+    keyTopics: TOPICS.filter((topic) => lower.includes(topic)).slice(0, 12),
+    skills: SKILLS.filter((skill) => lower.includes(skill)).slice(0, 15),
   };
 }
 
-/**
- * Browser counterpart to `src/generateCard.ts`.
- * Builds an ERC-8004 compatible AgentCard JSON structure.
- *
- * @param {Object} input
- * @param {string} [input.name]
- * @param {string} [input.bio]
- * @param {string} input.ocrHistory
- * @param {string} [input.githubReposText]
- */
-export function generateCard({ name, bio, ocrHistory, githubReposText = '' }) {
-  const githubRepos = parseGitHubRepos(githubReposText);
-  const processed = processHistory(ocrHistory, githubRepos);
-
-  const resolvedName = (name || '').trim() || 'Anonymous ConvoCard Builder';
-  const resolvedBio =
-    (bio || '').trim() ||
-    `Builder exploring ${processed.topics.slice(0, 2).join(' & ')} through ${processed.estimatedTurns} captured conversation turns.`;
-
+/** AgentCard preview: same core fields as src/generateCard.ts, without contentHash. */
+export function generateCard(input) {
+  const processed = processHistory(input);
+  const github = (input.githubRepos || []).map((g) => g.trim()).filter(Boolean);
   return {
-    schema: 'erc8004/v0.1',
-    type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
-    name: resolvedName,
-    description: resolvedBio,
-    active: true,
-    domains: processed.topics,
-    capabilities: processed.skills,
-    proofOfThought: {
-      source: 'ocr-conversation-history',
-      wordCount: processed.wordCount,
-      estimatedTurns: processed.estimatedTurns,
-      highlights: processed.signals,
-    },
-    repositories: githubRepos.map((r) => ({
-      slug: r.slug,
-      url: r.url,
-    })),
-    registrations: [
-      {
-        chainId: ARC_TESTNET_CONFIG.chainId,
-        network: 'arc-testnet',
-        agentRegistry: `eip155:${ARC_TESTNET_CONFIG.chainId}:${ARC_TESTNET_CONFIG.identityRegistryAddress}`,
-      },
-    ],
-    createdAt: new Date().toISOString(),
+    name: input.name?.trim() || 'Founder',
+    description: input.bio?.trim() || 'Founder whose living resume is their real AI conversation history and work.',
+    historySummary: processed.historySummary,
+    keyTopics: processed.keyTopics,
+    skills: processed.skills,
+    github,
+    // Legacy v0.1 source label, also used by the TypeScript core; no provider inference.
+    source: github.length > 0 ? 'mixed' : 'gemini-history',
+    version: '0.1',
+    generatedAt: new Date().toISOString(),
+    extra: { originalLength: input.rawHistory.length, cleanedLength: processed.cleanedText.length },
   };
 }
 
-/**
- * Compute a deterministic SHA-256 digest of the AgentCard JSON in the browser.
- * @param {Object} agentCard
- * @returns {Promise<string>}
- */
-export async function computeCardDigest(agentCard) {
-  const canonical = JSON.stringify(agentCard);
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    const encoded = new TextEncoder().encode(canonical);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return '0x' + hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+/** SHA-256 of the exact pretty-printed preview download (including generatedAt). */
+export async function computeCardDigest(card) {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('Preview checksums require HTTPS or localhost. Serve web with python3 -m http.server 8080 -d web.');
   }
-  return '0x' + canonical.length.toString(16).padStart(64, '0');
+  const bytes = new TextEncoder().encode(JSON.stringify(card, null, 2));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return '0x' + Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Browser counterpart to `src/registerAgent.ts` (v0.1 prep mode).
- * Prepares the Arc Testnet registration payload & CLI instructions.
- *
- * TODO(astra):
- * 1. Connect user's EVM wallet (MetaMask / Circle Passkey / WalletConnect) and switch to Chain ID 5042002.
- * 2. Pin `agentCard` JSON to IPFS (e.g., Pinata / web3.storage) to obtain `ipfs://<CID>`.
- * 3. Call `IdentityRegistry.register(tokenURI)` on Arc Testnet using viem/ethers.
- *
- * @param {Object} agentCard
- */
-export async function prepareArcRegistration(agentCard) {
-  const digest = await computeCardDigest(agentCard);
-
+/** Local preparation only. No wallet, RPC call, upload or transaction happens here. */
+export async function prepareArcRegistration(card) {
+  if (!card?.name || !card?.historySummary || card.version !== '0.1') {
+    throw new Error('Generate a card before preparing registration.');
+  }
+  // TODO(astra): Connect an EIP-1193 wallet on an explicit user action, request the
+  // account, switch/check chain 5042002, and revalidate account/chain before signing.
+  // Never collect a private key in this frontend.
+  // TODO(v0.2): Pin the finalized registration metadata via an authenticated server
+  // integration (no pinning secrets in /web), and use only the returned ipfs:// CID.
+  // TODO(astra): After review, simulate and call IdentityRegistry.register(agentURI),
+  // wait for a successful receipt, then read Registered from that receipt only.
+  // Add registrations/agentId only after confirmation; see src/registerAgent.ts.
   return {
+    status: 'prepared',
+    submitted: false,
     network: ARC_TESTNET_CONFIG,
-    digest,
-    // Placeholder URI until Astra wires up IPFS pinning in v0.2
-    pendingTokenUri: `ipfs://PENDING_IPFS_PIN/${digest.slice(2, 14)}`,
-    agentCard,
-    cliCommand: 'npx tsx scripts/register.ts',
+    checksum: { algorithm: 'SHA-256', scope: 'preview-json', value: await computeCardDigest(card) },
+    cardPreview: card,
+    metadataURI: null, // The CLI finalizes metadata as a real data URI; IPFS is optional later.
+    cli: {
+      inputFile: 'conversation-input.json',
+      generate: 'npm run generate -- --input conversation-input.json',
+      dryRun: 'npm run register -- --input conversation-input.json --dry-run',
+      register: 'npm run register -- --input conversation-input.json',
+    },
   };
 }

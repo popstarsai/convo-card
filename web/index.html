@@ -94,7 +94,7 @@
               placeholder="One URL per line, e.g.&#10;https://github.com/popstarsai/convo-card&#10;https://github.com/popstarsai/arc-agent-kit"
             ></textarea>
             <div class="field-hint">
-              Repo names and stack signals are woven into your AgentCard’s proof-of-work.
+              Links are included in your card. Repository contents are not fetched.
             </div>
           </div>
 
@@ -117,8 +117,8 @@
       <section class="panel output-panel" aria-labelledby="output-heading">
         <div class="panel-header">
           <div>
-            <h2 id="output-heading">2. Living AgentCard</h2>
-            <p class="panel-subtitle">Structured ERC-8004 identity distilled from your conversations.</p>
+            <h2 id="output-heading">2. AgentCard Preview</h2>
+            <p class="panel-subtitle">Review your summary and skills before preparing registration.</p>
           </div>
           <div class="view-toggle" role="tablist" aria-label="Card view mode">
             <button type="button" id="tab-card" class="toggle-btn active" role="tab" aria-selected="true">
@@ -136,7 +136,7 @@
           <h3>No AgentCard generated yet</h3>
           <p>
             Paste your OCR’d conversation history on the left and click
-            <strong>Generate Card</strong> to distill your topics, skills, and proof-of-work into an ERC-8004 card.
+            <strong>Generate Card</strong> to preview your topics, skills, and conversation summary.
           </p>
         </div>
 
@@ -147,7 +147,7 @@
             <div class="agent-identity">
               <div class="agent-name-row">
                 <h3 id="card-name">Unnamed Builder</h3>
-                <span class="erc-chip">ERC-8004</span>
+                <span class="erc-chip">Not registered</span>
               </div>
               <p id="card-bio" class="agent-bio"></p>
             </div>
@@ -169,7 +169,7 @@
 
           <!-- Conversation Highlights / Proof of Thought -->
           <div class="card-section">
-            <h4>Conversation Signals</h4>
+            <h4>Conversation Summary</h4>
             <ul class="signal-list" id="card-signals"></ul>
           </div>
 
@@ -183,14 +183,14 @@
           <div class="card-footer">
             <div class="card-footer-left">
               <button type="button" id="copy-json-btn" class="btn btn-ghost btn-sm">
-                Copy JSON
+                Copy Preview
               </button>
               <button type="button" id="download-json-btn" class="btn btn-ghost btn-sm">
-                Download .json
+                Download Preview
               </button>
             </div>
             <button type="button" id="register-arc-btn" class="btn btn-accent">
-              Register on Arc Testnet
+              Prepare Arc Registration
             </button>
           </div>
         </div>
@@ -200,66 +200,80 @@
           <pre><code id="json-code"></code></pre>
         </div>
 
-        <!-- Arc Testnet Registration Prep Drawer -->
-        <div id="arc-panel" class="arc-panel" hidden>
+        <div id="arc-error" class="alert alert-error" role="alert" hidden></div>
+
+        <!-- Local preparation; this panel never claims a submitted transaction. -->
+        <div id="arc-panel" class="arc-panel" tabindex="-1" aria-labelledby="arc-heading" hidden>
           <div class="arc-panel-header">
             <div>
-              <span class="arc-eyebrow">Arc Testnet · Registration Prep (v0.1)</span>
-              <h3>Ready to Mint ERC-8004 Identity</h3>
+              <span class="arc-eyebrow">Prepared locally · Not submitted</span>
+              <h3 id="arc-heading">Register your card on Arc Testnet</h3>
             </div>
-            <button type="button" id="close-arc-btn" class="btn btn-ghost btn-sm" aria-label="Close registration panel">
-              ✕
-            </button>
+            <button type="button" id="close-arc-btn" class="btn btn-ghost btn-sm" aria-label="Close registration panel">✕</button>
           </div>
 
           <p class="arc-description">
-            Browser wallet signing &amp; IPFS pinning are stubbed for v0.1. Below is the prepared
-            on-chain registration payload and CLI fallback using <code>scripts/register.ts</code>.
+            Your card is still local. Download your input to continue with the CLI.
+            Browser wallet connection is coming in v0.2.
           </p>
 
           <div class="arc-grid">
             <div class="arc-kv">
               <span class="kv-label">Network</span>
-              <span class="kv-value">Arc Testnet (Chain ID: 5042002)</span>
+              <span class="kv-value" id="arc-network">—</span>
+            </div>
+            <div class="arc-kv">
+              <span class="kv-label">Identity Registry</span>
+              <span class="kv-value mono" id="arc-registry">—</span>
             </div>
             <div class="arc-kv">
               <span class="kv-label">RPC URL</span>
-              <span class="kv-value mono">https://rpc.testnet.arc.io</span>
+              <span class="kv-value mono" id="arc-rpc">—</span>
             </div>
             <div class="arc-kv">
               <span class="kv-label">Gas Token</span>
-              <span class="kv-value">USDC (Testnet Faucet)</span>
+              <span class="kv-value" id="arc-gas">—</span>
             </div>
             <div class="arc-kv">
-              <span class="kv-label">Card Digest (SHA-256)</span>
+              <span class="kv-label">Preview Checksum (SHA-256)</span>
               <span class="kv-value mono" id="arc-digest">—</span>
+            </div>
+            <div class="arc-kv">
+              <span class="kv-label">Metadata Storage</span>
+              <span class="kv-value">Created by CLI as a data URI. IPFS upload is not connected.</span>
             </div>
           </div>
 
           <div class="arc-steps">
-            <h4>Next Steps to Register</h4>
+            <h4>Continue with your own card</h4>
             <ol>
               <li>
-                Download <code>agent-card.json</code> or copy the prepared payload below.
+                Download <code>conversation-input.json</code> and move it into your local project folder.
+                It includes your pasted history; keep this input file private.
               </li>
               <li>
-                Run the v0.1 CLI registrar from the project root:
-                <pre class="cli-box"><code id="arc-cli-cmd">npx tsx scripts/register.ts</code></pre>
+                Run <code>npm install</code>, then preview registration from the project root:
+                <pre class="cli-box"><code id="arc-cli-cmd"></code></pre>
+                This dry run needs no wallet and sends no transaction.
               </li>
               <li>
-                <strong>Coming next (Astra handoff):</strong> Connect EVM wallet, upload card to IPFS,
-                and submit <code>register(tokenURI)</code> directly from this button.
+                Review the final card and metadata. Registration publishes the summary, name, bio and repository links.
+                The CLI adds the final card’s Keccak-256 content hash.
+              </li>
+              <li>
+                To submit, configure a dedicated test wallet in <code>.env</code> using
+                <code>.env.example</code>, fund it with testnet USDC, then run:
+                <pre class="cli-box"><code id="arc-register-cmd"></code></pre>
+                The CLI reports the transaction and Agent ID after confirmation.
               </li>
             </ol>
           </div>
 
           <div class="arc-actions">
-            <button type="button" id="copy-payload-btn" class="btn btn-primary btn-sm">
-              Copy Registration Payload
-            </button>
-            <button type="button" id="wallet-stub-btn" class="btn btn-ghost btn-sm" disabled title="Planned for v0.2 wallet integration">
-              Connect Wallet (v0.2)
-            </button>
+            <button type="button" id="download-input-btn" class="btn btn-primary btn-sm">Download CLI Input</button>
+            <button type="button" id="copy-payload-btn" class="btn btn-ghost btn-sm">Copy Preparation</button>
+            <button type="button" id="download-prep-btn" class="btn btn-ghost btn-sm">Download Preparation</button>
+            <button type="button" id="wallet-stub-btn" class="btn btn-ghost btn-sm" disabled title="Browser wallet connection is planned for v0.2">Connect Wallet (v0.2)</button>
           </div>
         </div>
       </section>

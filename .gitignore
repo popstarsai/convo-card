@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+conversation-input.json
+!examples/conversation-input.json
+agent-card.json
+agent-card-preview.json
+registration-prep.json

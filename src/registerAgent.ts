@@ -1,123 +1,95 @@
-/**
- * registerAgent.ts
- * Registers an AgentCard as an ERC-8004 identity on Arc Testnet.
- */
-
+/** Registers a finalized AgentCard on Arc Testnet. Browser preparation is separate. */
 import {
-  createWalletClient,
-  createPublicClient,
-  http,
-  parseAbiItem,
-  type Hash,
+  createWalletClient, createPublicClient, http,
+  isAddress, zeroAddress, parseAbi, parseEventLogs,
+  type Address, type Chain, type TransactionReceipt,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { AgentCard, RegistrationResult, ArcConfig } from "./types.js";
 import { cardToDataURI } from "./generateCard.js";
 
-// Default Arc Testnet Identity Registry (ERC-8004)
-// Confirm latest address in docs.arc.io if needed
-const DEFAULT_IDENTITY_REGISTRY =
+// Keep web/card-engine.js aligned; covered by the cross-runtime tests.
+export const DEFAULT_IDENTITY_REGISTRY =
   "0x8004A818BFB912233c491871b3d84c89A494BD9e" as const;
+export const ARC_TESTNET = {
+  id: 5042002,
+  name: "Arc Testnet",
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+  rpcUrls: { default: { http: ["https://rpc.testnet.arc.io"] } },
+  blockExplorers: { default: { name: "Arc Explorer", url: "https://explorer.testnet.arc.io" } },
+  testnet: true,
+} as const satisfies Chain;
 
-const identityAbi = [
-  {
-    name: "register",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [{ name: "agentURI", type: "string" }],
-    outputs: [],
-  },
-] as const;
+const identityAbi = parseAbi([
+  "function register(string agentURI) returns (uint256 agentId)",
+  "event Registered(uint256 indexed agentId, string agentURI, address indexed owner)",
+]);
 
-/**
- * Registers the AgentCard on Arc Testnet via ERC-8004 Identity Registry.
- */
-export async function registerAgent(
-  card: AgentCard,
-  config: ArcConfig
-): Promise<RegistrationResult> {
+/** Shared receipt interpretation for the CLI and a future browser wallet adapter. */
+export function readRegistrationReceipt(
+  receipt: Pick<TransactionReceipt, "status" | "logs" | "transactionHash">,
+  identityRegistry: Address,
+  owner: Address,
+  metadataURI: string
+): RegistrationResult {
+  const txHash = receipt.transactionHash;
+  const result = {
+    txHash, metadataURI,
+    explorerUrl: `${ARC_TESTNET.blockExplorers.default.url}/tx/${txHash}`,
+  };
+  if (receipt.status !== "success") {
+    return { ...result, success: false, error: "Registration transaction reverted." };
+  }
+  // Only this receipt and registry can establish the ID; another mint in the
+  // same block must never be reported as this user's registration.
+  const logs = parseEventLogs({
+    abi: identityAbi, eventName: "Registered",
+    logs: receipt.logs.filter((log) => log.address.toLowerCase() === identityRegistry.toLowerCase()),
+  });
+  const registration = logs.find((log) => log.args.owner.toLowerCase() === owner.toLowerCase()
+    && log.args.agentURI === metadataURI);
+  if (!registration) {
+    return { ...result, success: false,
+      error: "Transaction confirmed but no matching Registered event was found. Inspect it before retrying." };
+  }
+  return { ...result, success: true, agentId: registration.args.agentId.toString() };
+}
+
+export async function registerAgent(card: AgentCard, config: ArcConfig): Promise<RegistrationResult> {
+  let txHash: `0x${string}` | undefined;
   try {
-    if (!config.privateKey) {
-      return {
-        success: false,
-        error: "PRIVATE_KEY is required to register an agent",
-      };
+    if (config.chainId !== ARC_TESTNET.id) throw new Error("v0.1 registration supports Arc Testnet (5042002) only.");
+    const identityRegistry = config.identityRegistry || DEFAULT_IDENTITY_REGISTRY;
+    if (!isAddress(identityRegistry) || identityRegistry.toLowerCase() === zeroAddress) {
+      throw new Error("A valid, non-zero Identity Registry address is required.");
     }
-
+    if (!config.privateKey || !/^0x[0-9a-fA-F]{64}$/.test(config.privateKey)) {
+      throw new Error("Set PRIVATE_KEY in your local .env to a dedicated test wallet key.");
+    }
     const account = privateKeyToAccount(config.privateKey);
-    const rpcUrl = config.rpcUrl || "https://rpc.testnet.arc.io";
-    const identityRegistry =
-      config.identityRegistry || DEFAULT_IDENTITY_REGISTRY;
-
-    const publicClient = createPublicClient({
-      transport: http(rpcUrl),
-    });
-
-    const walletClient = createWalletClient({
-      account,
-      transport: http(rpcUrl),
-    });
-
-    // Create metadata URI (data URI for v0.1 – later we can switch to IPFS)
-    const metadataURI = cardToDataURI(card);
-
-    console.log("Registering agent on Arc Testnet...");
-    console.log("Wallet:", account.address);
-    console.log("Registry:", identityRegistry);
-
-    // Send the register transaction
-    const txHash = await walletClient.writeContract({
-      address: identityRegistry,
-      abi: identityAbi,
-      functionName: "register",
-      args: [metadataURI],
-      account,
-      chain: null, // Arc Testnet is not in viem's default chains yet
-    });
-
-    console.log("Transaction sent:", txHash);
-
-    // Wait for receipt
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash: txHash as Hash,
-    });
-
-    // Try to extract the agentId from Transfer event
-    let agentId: string | undefined;
-
-    const transferLogs = await publicClient.getLogs({
-      address: identityRegistry,
-      event: parseAbiItem(
-        "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
-      ),
-      args: {
-        to: account.address,
-      },
-      fromBlock: receipt.blockNumber,
-      toBlock: receipt.blockNumber,
-    });
-
-    if (transferLogs.length > 0) {
-      const tokenId = transferLogs[transferLogs.length - 1].args.tokenId;
-      if (tokenId !== undefined) {
-        agentId = tokenId.toString();
-      }
+    const transport = http(config.rpcUrl || ARC_TESTNET.rpcUrls.default.http[0]);
+    const publicClient = createPublicClient({ chain: ARC_TESTNET, transport });
+    const walletClient = createWalletClient({ account, chain: ARC_TESTNET, transport });
+    if (await publicClient.getChainId() !== ARC_TESTNET.id) {
+      throw new Error("RPC chain does not match Arc Testnet (5042002). No transaction sent.");
     }
 
-    const explorerUrl = `https://explorer.testnet.arc.io/tx/${txHash}`;
-
-    return {
-      success: true,
-      agentId,
-      txHash: txHash as `0x${string}`,
-      metadataURI,
-      explorerUrl,
-    };
-  } catch (err: any) {
-    console.error("Registration failed:", err);
+    // TODO(v0.2): Pin this same finalized registration JSON to IPFS via a server
+    // integration and replace the data URI only after a real CID is returned.
+    const metadataURI = cardToDataURI(card);
+    const { request } = await publicClient.simulateContract({
+      address: identityRegistry, abi: identityAbi, functionName: "register",
+      args: [metadataURI], account,
+    });
+    txHash = await walletClient.writeContract(request);
+    console.log("Transaction sent:", txHash);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    return readRegistrationReceipt(receipt, identityRegistry, account.address, metadataURI);
+  } catch (error) {
     return {
       success: false,
-      error: err?.message || "Unknown error during registration",
+      ...(txHash ? { txHash, explorerUrl: `${ARC_TESTNET.blockExplorers.default.url}/tx/${txHash}` } : {}),
+      error: error instanceof Error ? error.message : "Unknown error during registration",
     };
   }
 }

@@ -1,59 +1,38 @@
-/**
- * scripts/register.ts
- * Simple CLI to generate a card from sample data and register it.
- * Usage: npx tsx scripts/register.ts
- */
-
+/** Register the user's exported input; --dry-run is entirely offline. */
 import "dotenv/config";
-import { generateCard, printCard } from "../src/generateCard.js";
-import { registerAgent } from "../src/registerAgent.js";
-import type { ConversationInput } from "../src/types.js";
+import { parseArgs } from "node:util";
+import { generateCard, cardToDataURI } from "../src/generateCard.js";
+import { registerAgent, ARC_TESTNET, DEFAULT_IDENTITY_REGISTRY } from "../src/registerAgent.js";
+import { readConversationInput } from "./input.js";
 
 async function main() {
-  console.log("\n=== ConvoCard Registration Script ===\n");
-
-  // Example input – replace with real OCR text later
-  const input: ConversationInput = {
-    name: "Alin Eugen Costin",
-    bio: "Founder whose living resume is his real AI conversation history.",
-    rawHistory: `
-      Recent conversations about building AI agents, ERC-8004 identity,
-      Arc blockchain, agentic development, ownership stacks,
-      Rust plugins, Lightning physics equations, and turning
-      conversation history into on-chain business cards.
-    `,
-    githubRepos: [
-      "https://github.com/popstarsai/convo-card",
-    ],
+  const { values } = parseArgs({ options: {
+    input: { type: "string" }, "dry-run": { type: "boolean", default: false },
+  }, allowPositionals: false });
+  const card = generateCard(await readConversationInput(values.input));
+  const config = {
+    rpcUrl: process.env.ARC_RPC_URL || ARC_TESTNET.rpcUrls.default.http[0],
+    chainId: Number(process.env.ARC_CHAIN_ID || ARC_TESTNET.id),
+    identityRegistry: (process.env.IDENTITY_REGISTRY || DEFAULT_IDENTITY_REGISTRY) as `0x${string}`,
+    privateKey: process.env.PRIVATE_KEY as `0x${string}` | undefined,
   };
 
-  // 1. Generate the card
-  const card = generateCard(input);
-  printCard(card);
-
-  // 2. Register on Arc
-  const result = await registerAgent(card, {
-    rpcUrl: process.env.ARC_RPC_URL || "https://rpc.testnet.arc.io",
-    chainId: Number(process.env.ARC_CHAIN_ID || 5042002),
-    identityRegistry: (process.env.IDENTITY_REGISTRY ||
-      "0x8004A818BFB912233c491871b3d84c89A494BD9e") as `0x${string}`,
-    privateKey: process.env.PRIVATE_KEY as `0x${string}`,
-  });
-
-  if (result.success) {
-    console.log("\n✅ Registration successful!");
-    console.log("Agent ID:     ", result.agentId ?? "not extracted");
-    console.log("Tx Hash:      ", result.txHash);
-    console.log("Explorer:     ", result.explorerUrl);
-    console.log("Metadata URI: ", result.metadataURI?.slice(0, 80) + "...");
-  } else {
-    console.error("\n❌ Registration failed:");
-    console.error(result.error);
-    process.exit(1);
+  if (values["dry-run"]) {
+    console.log(JSON.stringify({
+      status: "dry-run", submitted: false, card,
+      target: { chainId: config.chainId, rpcUrl: config.rpcUrl, identityRegistry: config.identityRegistry },
+      functionName: "register", metadataURI: cardToDataURI(card),
+    }, null, 2));
+    return;
   }
+
+  console.log("Submitting the reviewed card to Arc Testnet:", card.name);
+  const result = await registerAgent(card, config);
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.success) process.exitCode = 1;
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : "Registration failed.");
+  process.exitCode = 1;
 });

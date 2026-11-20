@@ -3,7 +3,7 @@
  * Builds a structured AgentCard from processed history.
  */
 
-import { keccak256, toBytes, stringToHex } from "viem";
+import { keccak256, toBytes } from "viem";
 import type { ConversationInput, AgentCard } from "./types.js";
 import { processHistory } from "./processHistory.js";
 
@@ -30,7 +30,7 @@ export function generateCard(input: ConversationInput): AgentCard {
     keyTopics: processed.keyTopics,
     skills: processed.skills,
     github,
-    source: github.length > 0 ? "mixed" : "gemini-history",
+    source: (github.length > 0 ? "mixed" : "gemini-history") as AgentCard["source"],
     version: "0.1" as const,
   };
 
@@ -55,7 +55,16 @@ export function generateCard(input: ConversationInput): AgentCard {
  * Helper to turn the card into a metadataURI (data URI for v0.1)
  */
 export function cardToDataURI(card: AgentCard): string {
-  const json = JSON.stringify(card, null, 2);
+  // ERC-8004 registration envelope. Keep custom ConvoCard fields and their hash.
+  // No agentId/registrations claim exists until the registry confirms a mint.
+  // TODO(v0.2): Add actual service endpoints and confirmed registration metadata.
+  const json = JSON.stringify({
+    ...card,
+    type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+    services: [],
+    active: false,
+    x402Support: false,
+  }, null, 2);
   const base64 = Buffer.from(json).toString("base64");
   return `data:application/json;base64,${base64}`;
 }

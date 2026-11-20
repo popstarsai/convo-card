@@ -1,0 +1,6 @@
+{
+  "name": "Alex Rivera",
+  "bio": "Building useful tools from AI conversation history.",
+  "rawHistory": "User: I am building AI agents with TypeScript and Python.\nAssistant: We can explore ERC-8004 identity, Arc, and GitHub together.",
+  "githubRepos": ["https://github.com/popstarsai/convo-card"]
+}

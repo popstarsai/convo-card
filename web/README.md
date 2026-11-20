@@ -1,32 +1,40 @@
-# ConvoCard Web Frontend (`/web`)
+# ConvoCard web frontend
 
-Zero-build, vanilla HTML/CSS/JS frontend for **ConvoCard v0.1** (*"My conversation history is my business card."*).
+Zero-build HTML, CSS and JavaScript for v0.1. All preview processing stays in the browser; there are no external scripts, uploads, wallet calls or RPC calls.
 
-## Structure
-
-- `index.html` — Two-column studio layout (OCR conversation input + live ERC-8004 AgentCard preview + Arc Testnet registration prep).
-- `style.css` — Self-contained dark-mode styles and responsive grid.
-- `card-engine.js` — Browser-compatible ES module mirroring `src/processHistory.ts`, `src/generateCard.ts`, and `src/registerAgent.ts`.
-- `app.js` — DOM state and event controller.
-
-## Running Locally
-
-Because `app.js` uses native ES modules (`<script type="module">`), serve the `/web` folder over any local static HTTP server:
+From the repository root:
 
 ```bash
-# Option 1: Python
 python3 -m http.server 8080 -d web
-
-# Option 2: Node
-npx serve web -p 8080
 ```
 
-Then open `http://localhost:8080` in your browser.
+Open [http://localhost:8080](http://localhost:8080). HTTPS or localhost is needed for Web Crypto and clipboard features.
 
-## Handoff Notes for v0.2 (ChatGPT Astra)
+## Files
 
-Search for `TODO(astra)` in `web/card-engine.js` for the clean extension points:
-1. **Wallet Connection**: Connect MetaMask / Circle Passkey / WalletConnect to **Arc Testnet** (`Chain ID: 5042002`, `RPC: https://rpc.testnet.arc.io`, gas token: `USDC`).
-2. **IPFS Pinning**: Upload `agentCard` JSON to IPFS (e.g., Pinata) to get a real `ipfs://<CID>` `tokenURI`.
-3. **On-Chain Minting**: Submit `register(tokenURI)` to the deployed ERC-8004 `IdentityRegistry` contract.
-4. **TypeScript Sharing**: Add a lightweight Vite/esbuild setup if you want to import `src/processHistory.ts` and `src/generateCard.ts` directly.
+- `index.html` — input, preview and registration preparation panel.
+- `style.css` — responsive studio styles.
+- `card-engine.js` — `ConversationInput` adapter, core-aligned preview and explicit local preparation.
+- `app.js` — UI state, errors, downloads and copy actions.
+
+## Registration handoff
+
+Generate and review a card, select **Prepare Arc Registration**, then download `conversation-input.json`. This file contains the pasted history and is intended for local CLI use. From the project root after `npm install`:
+
+```bash
+npm run generate -- --input conversation-input.json
+npm run register -- --input conversation-input.json --dry-run
+```
+
+The dry run produces the final metadata without a wallet or network call. Actual registration requires a configured `.env`, a funded test wallet and running the same register command without `--dry-run`. See the [main README](../README.md) for setup.
+
+`agent-card-preview.json` shares the TypeScript card's fields but omits the final Keccak-256 `contentHash`. The browser's SHA-256 checksum identifies the exact preview JSON only. `registration-prep.json` is a preparation record, not a transaction or IPFS upload; its `metadataURI` remains null until CLI finalization. The UI never claims an Agent ID before minting.
+
+## v0.2 integration points
+
+Search for `TODO(astra)` and `TODO(v0.2)` in the engine and controller:
+
+1. Connect an EIP-1193 wallet and verify Arc Testnet/account changes before signing.
+2. Optionally upload the finalized metadata through a server integration and use its real IPFS CID.
+3. Simulate and submit `register(agentURI)` only on an explicit sign action; interpret the confirmed receipt as in `src/registerAgent.ts`.
+4. Share the TypeScript core when a build becomes useful. Until then, `npm test` checks preview/core parity.

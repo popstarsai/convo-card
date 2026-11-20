@@ -46,6 +46,11 @@ body {
   padding: 24px 20px 48px;
 }
 
+/* Honor hidden even on elements with an explicit display rule. */
+[hidden] {
+  display: none !important;
+}
+
 /* Topbar */
 .topbar {
   display: flex;
@@ -138,6 +143,7 @@ body {
 }
 
 .panel {
+  min-width: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -621,6 +627,8 @@ textarea:focus {
 }
 
 .cli-box {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   margin: 6px 0 0;
   padding: 8px 10px;
   background: var(--bg-elevated);

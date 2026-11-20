@@ -1,62 +1,16 @@
-# ConvoCard – User Onboarding
+# ConvoCard — v0.1 onboarding
 
-**Goal:** Turn your AI conversation history into a living on-chain business card in under 10 minutes.
+You can generate and prepare a card without a wallet. Registration currently uses the CLI; browser wallet connection is planned for v0.2.
 
-## Prerequisites
+1. From the repository root, run `python3 -m http.server 8080 -d web` and open [localhost:8080](http://localhost:8080).
+2. Paste your AI conversation history, optionally add your name, bio and GitHub links, then select **Generate Card**.
+3. Review the summary and JSON. Select **Prepare Arc Registration**, then **Download CLI Input**. Keep this input file private: it includes the pasted history.
+4. Move `conversation-input.json` into your local checkout. Install Node.js 18.19+ and run `npm install` there.
+5. Run `npm run register -- --input conversation-input.json --dry-run`. This generates the final card and data URI offline. Review the metadata that will be published, including the summary's transcript excerpts.
+6. To register, copy `.env.example` to `.env` and set a dedicated test wallet's `PRIVATE_KEY`. Leave the default Arc Testnet chain and registry settings unless you are deliberately testing a different registry.
+7. Request testnet USDC for that wallet from the [Circle faucet](https://faucet.circle.com), selecting Arc Testnet.
+8. Run `npm run register -- --input conversation-input.json`. This submits a real testnet transaction. A confirmed result includes the transaction hash, explorer URL, metadata URI, and Agent ID when decoded from the receipt.
 
-- A modern browser
-- A wallet that can connect to Arc Testnet (MetaMask, Rabby, etc.)
-- Some testnet USDC for gas (free from faucet)
+Arc Testnet uses chain ID `5042002`, RPC `https://rpc.testnet.arc.io`, and Identity Registry `0x8004A818BFB912233c491871b3d84c89A494BD9e`. IPFS is not required for v0.1's data URI storage.
 
-## Step-by-step
-
-### 1. Get testnet USDC
-1. Go to [https://faucet.circle.com](https://faucet.circle.com)
-2. Select **Arc Testnet**
-3. Paste your wallet address
-4. Request testnet USDC
-
-### 2. Add Arc Testnet to your wallet
-- Network Name: `Arc Testnet`
-- RPC URL: `https://rpc.testnet.arc.io`
-- Chain ID: `5042002`
-- Currency Symbol: `USDC`
-- Block Explorer: `https://explorer.testnet.arc.io`
-
-### 3. Prepare your data
-1. Open your Gemini or ChatGPT history
-2. Take screenshots of the most relevant conversations
-3. Use iPhone Picture-in-Picture + OCR (or any OCR tool) to extract the text
-4. Copy the extracted text
-
-### 4. Generate your Agent Card
-1. Open the ConvoCard web app (or run locally)
-2. Paste the conversation history
-3. (Optional) Add GitHub repository links
-4. Click **Generate Card**
-5. Review the structured card
-
-### 5. Register on Arc
-1. Connect your wallet
-2. Click **Register Agent**
-3. Confirm the transaction
-4. Your on-chain Agent ID is now your living business card
-
-### 6. Share it
-Once registered you will receive:
-- Agent ID (ERC-721 token ID)
-- Transaction hash
-- Explorer link
-- Metadata URI
-
-You can now point anyone to your on-chain identity.
-
----
-
-**Notes for later versions**
-- Mobile-first OCR flow
-- One-click update of the agent card
-- Mainnet support
-- Automatic GitHub activity ingestion
-
-This file will be updated by Astra after the core registration flow is finished.
+If a submitted transaction is followed by an error, check its explorer link before retrying. See the [main README](README.md) for file formats, development commands and current limitations.
