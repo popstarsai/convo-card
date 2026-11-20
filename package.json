@@ -1,0 +1,38 @@
+{
+  "name": "convo-card",
+  "version": "0.1.0",
+  "description": "My conversation history is my business card — turn AI chat history into an on-chain ERC-8004 agent identity on Arc",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "register": "tsx scripts/register.ts",
+    "generate": "tsx src/generateCard.ts",
+    "lint": "echo \"No linter configured yet\""
+  },
+  "keywords": [
+    "ai-agent",
+    "erc-8004",
+    "arc",
+    "business-card",
+    "conversation-history",
+    "on-chain-identity",
+    "circle",
+    "agentic-economy"
+  ],
+  "author": "Pop Stars AI",
+  "license": "MIT",
+  "dependencies": {
+    "viem": "^2.21.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
