@@ -30,3 +30,29 @@ ConvoCard makes that history your permanent, scoped, authenticated presence on t
 - Arc Testnet (Chain ID: 5042002)
 
 ## Project Structure
+
+
+## Quick Start (Developers)
+
+1. Clone the repo
+2. `npm install`
+3. Copy `.env.example` → `.env` and fill in values
+4. Follow `ONBOARDING.md`
+
+## Roadmap
+
+- [x] Core idea & repo structure
+- [ ] v0.1: Paste → Card → Register on Arc Testnet
+- [ ] Better OCR guidance + mobile flow
+- [ ] IPFS pinning of full history
+- [ ] Auto-update agent metadata
+- [ ] Mainnet support
+- [ ] Flare / other chains as secondary options
+
+## License
+
+MIT/Apache2.0
+
+---
+
+Built with the belief that **your real work is the best resume**.
